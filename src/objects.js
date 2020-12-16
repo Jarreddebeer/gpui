@@ -393,11 +393,15 @@ class Attribute3d {
 
 //
 
-export class Cleanser {
+const _cleanser_objects = new Set();
+const _cleanser_attributes = new Set();
+const _cleanser_primitives = new Set();
 
-    static objects    = new Set();
-    static attributes = new Set();
-    static primitives = new Set();
+export class Cleanser {
+    
+    get objects() { return _cleanser_objects; }
+    get attributes() { return _cleanser_attributes; }
+    get primitives() { return _cleanser_primitives; }
     
     static process(renderContext) {
         

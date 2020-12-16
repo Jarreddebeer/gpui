@@ -2,25 +2,16 @@
   "name": "gpui",
   "version": "1.0.0",
   "description": "GPU driven UI",
-  "main": "index.js",
-  "private": true,
-  "scripts": {
-    "develop": "webpack serve --hot --inline --history-api-fallback --mode development",
-    "build": "webpack --mode production"
-  },
   "author": "Jarred de Beer",
   "license": "ISC",
-  "devDependencies": {
-    "@babel/core": "^7.12.9",
-    "@babel/preset-env": "^7.12.7",
-    "babel-loader": "^8.2.2",
-    "file-loader": "^6.2.0",
-    "raw-loader": "^4.0.2",
-    "webpack": "^5.9.0",
-    "webpack-cli": "^4.2.0",
-    "webpack-dev-server": "^3.11.0"
+  "exports": {
+    "objects": "./src/objects.js"
   },
   "dependencies": {
     "gl-matrix": "^3.3.0"
-  }
+  },
+  "devDependencies": {
+    "@jspm/core": "^1.1.1"
+  },
+  "type": "module"
 }
