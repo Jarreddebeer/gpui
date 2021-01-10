@@ -8,12 +8,11 @@ class Framebuffer {
 
 export class OffscreenFramebuffer extends Framebuffer {
 
-    constructor(gl, clearCol=[0.0, 0.0, 0.0, 0.0]) {
+    constructor(gl) {
 
         super();
         this.width = gl.drawingBufferWidth;
         this.height = gl.drawingBufferHeight;
-        this.clearCol = clearCol;
         this.depthId = null
         this.textureId = null
         this.framebufferId = null
@@ -46,11 +45,7 @@ export class OffscreenFramebuffer extends Framebuffer {
     }
 
     bind(gl) {
-        //const col = gl.getParameter(gl.COLOR_CLEAR_VALUE);
-        //gl.clearColor(this.clearCol[0], this.clearCol[1], this.clearCol[2], this.clearCol[3]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebufferId);
-        //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        //gl.clearColor(col[0], col[1], col[2], col[3]);
     }
 
     createReadPixels(gl) {
@@ -96,4 +91,17 @@ export class OnscreenFramebuffer extends Framebuffer {
     bind(gl) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
+}
+
+export class XrFramebuffer extends Framebuffer {
+
+    constructor(glLayer) {
+        super(); 
+        this.framebufferId = glLayer.framebuffer; 
+    }
+    
+    bind(gl) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebufferId);
+    }
+    
 }

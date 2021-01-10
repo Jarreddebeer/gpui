@@ -1,4 +1,4 @@
-import { OnscreenFramebuffer } from './framebuffers.js';
+import { OnscreenFramebuffer, XrFramebuffer } from './framebuffers.js';
 
 export class RenderContext {
 
@@ -54,15 +54,15 @@ class RenderPass {
     }
 }
 
-export class ViewportGrid {
+export class View {
 
     constructor(width, height, cols=1, rows=1) {
         this.width = width;
         this.height = height;
         this.cols = cols;
         this.rows = rows;
-        this.viewports = new Array(this.cols * this.rows);
-        for (let i = 0; i < this.cols * this.rows; i++) this.viewports[i] = [0, 0, 0, 0];
+        this.views = new Array(this.cols * this.rows);
+        for (let i = 0; i < this.cols * this.rows; i++) this.views[i] = [0, 0, 0, 0];
         if (width && height) this.update(width, height);
     } 
     
@@ -78,22 +78,22 @@ export class ViewportGrid {
                 const idx = i * this.cols + j;
                 const x = w * j;
                 const y = h * i;
-                this.viewports[idx][0] = x; 
-                this.viewports[idx][1] = y;
-                this.viewports[idx][2] = w;
-                this.viewports[idx][3] = h;
+                this.views[idx][0] = x; 
+                this.views[idx][1] = y;
+                this.views[idx][2] = w;
+                this.views[idx][3] = h;
             }
         }
     }
 }
 
-export class FullViewportGrid extends ViewportGrid {
+export class FullView extends View {
     constructor(width, height) {
         super(width, height, 1, 1);
     }
 }
 
-export class VrViewportGrid extends ViewportGrid {
+export class VrView extends View {
     constructor(width, height) {
         super(width, height, 2, 1);
     }
@@ -104,21 +104,25 @@ class Renderer {
     constructor(render_context={}, render_layers=[]) { 
         this.renderContext = new RenderContext(render_context);
         this.renderLayers = help_deserializeRenderLayers(render_layers);
-        this.viewportGrid = new FullViewportGrid();
+        this.view = new FullView();
         this.flag = 0;
         this.objectFlag = 0;
     }
 
     _render(gl) { 
         
-        for (let viewport of this.viewportGrid.viewports) {
+        for (let viewport of this.view.views) {
         
             for (let renderLayer of this.renderLayers) {
 
                 const framebuffer = this.getFramebuffer(renderLayer); 
                 framebuffer.bind(gl);
 
-                gl.clearColor(this.background[0], this.background[1], this.background[2], this.background[3]);
+                if (!this._interaction) {
+                    gl.clearColor(this.background.r, this.background.g, this.background.b, this.background.a);
+                } else {
+                    gl.clearColor(0, 0, 0, 1);
+                }
                 this.applyViewportScissorAndClear(gl, viewport);
 
                 const renderFrames = renderLayer.frames;
@@ -184,7 +188,7 @@ export class WebglRenderer extends Renderer {
         gl.enable(gl.DEPTH_TEST);
         gl.enable(gl.SCISSOR_TEST);
         this.background = [1.0, 1.0, 1.0, 0.0];
-        this.viewportGrid.update(gl.drawingBufferWidth, gl.drawingBufferHeight);
+        this.view.update(gl.drawingBufferWidth, gl.drawingBufferHeight);
     }
 
     static createContext(canvas) {
@@ -208,7 +212,7 @@ export class WebglRenderer extends Renderer {
     
     resize(gl) {
         this.getOffscreenFramebuffer().resize(gl);
-        this.viewportGrid.update(gl.drawingBufferWidth, gl.drawingBufferHeight);
+        this.view.update(gl.drawingBufferWidth, gl.drawingBufferHeight);
     }
 
     getFramebuffer(renderLayer) {
@@ -225,13 +229,12 @@ export class WebglRenderer extends Renderer {
     
     render(gl) {
         this._interaction = false;
-        gl.clearColor(this.background[0], this.background[1], this.background[2], this.background[3]);
+        //gl.clearColor(this.background[0], this.background[1], this.background[2], this.background[3]);
         this._render(gl);
     }
     
     renderInteraction(gl) {
         this._interaction = true;
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
         this._render(gl);
     }
     
@@ -246,6 +249,88 @@ export class WebglRenderer extends Renderer {
             program.setUniform(gl, 'opacity', 1, 'float');
             program.draw(gl, object.interactiveMesh);
         }
+    }
+}
+
+export class XrRenderer extends Renderer {
+    
+    constructor(gl, render_context, render_layers) {
+        super(render_context, render_layers);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.SCISSOR_TEST);
+        this.background = [1.0, 1.0, 1.0, 0.0];
+        this.view = {views: [0, 0, 0, 0]} 
+    }
+    
+    static createContext(canvas) {
+        return canvas.getContext('webgl', {
+            xrCompatible: true
+            /*antialias: true, 
+            alpha: false, 
+            premultipliedAlpha: false*/
+        });
+    }
+
+    applyViewportScissorAndClear(gl, viewport) {
+        gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+        gl.scissor(viewport.x, viewport.y, viewport.width, viewport.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    }
+    
+    render(gl, frame, refSpace) {
+        
+        this._interaction = false;
+        const session = frame.session;
+        const pose = frame.getViewerPose(refSpace);
+
+        if (!pose) return;
+        if (!this.view) this.view = {};
+
+        let glLayer = session.renderState.baseLayer;
+        if (this.view.views.length != pose.views.length) {
+            this.view.views = new Array(pose.views.length)
+        }
+        
+        for (let i = 0; i < pose.views.length; i++) {
+            this.view.views[i] = glLayer.getViewport(pose.views[i]);
+        }
+        
+        this._render(gl);
+    }
+    
+    renderInteraction(gl) {
+        this._interaction = true;
+        this._render(gl);
+    }
+
+    renderPass(gl, program, object) {
+        program.model = object.transform;
+        // TODO: add an override (flag) for object opacity
+        if (!this._interaction) {
+            program.setUniform(gl, 'opacity', object.opacity, 'float');
+            program.draw(gl, object.mesh);
+        } else {
+            program.setUniform(gl, 'opacity', 1, 'float');
+            program.draw(gl, object.interactiveMesh);
+        }
+    }
+
+    resize(gl) {
+        this.getOffscreenFramebuffer().resize(gl);
+    }
+
+    getFramebuffer(renderLayer) {
+        const framebuffer = this.renderContext.framebuffers[renderLayer.framebuffer];
+        if (!this._interaction) { 
+            return framebuffer; 
+        }
+        // TODO: get OnscreenFramebuffer out of here
+        if (framebuffer instanceof XrFramebuffer) {
+            return this.renderContext.framebuffers.offscreen;
+        }
+        return framebuffer;
     }
 }
 
